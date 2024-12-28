@@ -2,7 +2,7 @@
 
 A Python tool to convert GitBook documentation into a well-formatted PDF file. The tool supports two conversion methods:
 1. HTML method (using wkhtmltopdf)
-2. Print method (using Chrome's PDF printing)
+2. Print method (using Chrome's PDF printing) - Recommended for most users
 
 ## Features
 
@@ -17,10 +17,10 @@ A Python tool to convert GitBook documentation into a well-formatted PDF file. T
 ## Prerequisites
 
 1. Python 3.6 or higher
-2. For HTML method:
+2. For HTML method (optional):
    - wkhtmltopdf (Download from: https://wkhtmltopdf.org/downloads.html)
-3. For Print method:
-   - Google Chrome browser
+3. For Print method (recommended):
+   - Google Chrome browser (already installed on most systems)
 
 ## Installation
 
@@ -35,29 +35,28 @@ cd gitbook-to-pdf
 pip install -r requirements.txt
 ```
 
-3. Install wkhtmltopdf (if using HTML method):
-   - Windows: Download and install from https://wkhtmltopdf.org/downloads.html
-   - Linux: `sudo apt-get install wkhtmltopdf`
-   - macOS: `brew install wkhtmltopdf`
+3. Additional setup:
+   - For HTML method: Install wkhtmltopdf from https://wkhtmltopdf.org/downloads.html
+   - For Print method: No additional setup needed if Chrome is installed
 
 ## Usage
 
 The tool provides two methods for converting GitBook to PDF:
 
-### 1. HTML Method (Default)
-Uses wkhtmltopdf for conversion. Better for custom styling and format control.
+### 1. Print Method (Recommended)
+Uses Chrome's PDF printing. Better for JavaScript-heavy pages and modern web content. No additional software required.
+
+```bash
+python gitbook_to_pdf.py https://your-gitbook-url.com -o output.pdf -m print
+```
+
+### 2. HTML Method
+Uses wkhtmltopdf for conversion. Better for custom styling and format control. Requires wkhtmltopdf installation.
 
 ```bash
 python gitbook_to_pdf.py https://your-gitbook-url.com -o output.pdf
 # or explicitly specify the method
 python gitbook_to_pdf.py https://your-gitbook-url.com -o output.pdf -m html
-```
-
-### 2. Print Method
-Uses Chrome's PDF printing. Better for JavaScript-heavy pages and modern web content.
-
-```bash
-python gitbook_to_pdf.py https://your-gitbook-url.com -o output.pdf -m print
 ```
 
 ### Command Line Arguments
@@ -79,6 +78,18 @@ The generated PDF includes:
 
 ## Method Comparison
 
+### Print Method (Chrome) - Recommended
+- Pros:
+  - No additional software required
+  - Better JavaScript support
+  - More accurate web rendering
+  - Good for modern web pages
+  - Handles dynamic content better
+- Cons:
+  - Less control over styling
+  - Requires Chrome browser (but usually pre-installed)
+  - Heavier resource usage
+
 ### HTML Method (wkhtmltopdf)
 - Pros:
   - Fine-grained control over PDF styling
@@ -86,19 +97,9 @@ The generated PDF includes:
   - Better page header/footer control
   - Lighter weight
 - Cons:
-  - May not handle JavaScript content well
   - Requires wkhtmltopdf installation
-
-### Print Method (Chrome)
-- Pros:
-  - Better JavaScript support
-  - More accurate web rendering
-  - Good for modern web pages
-  - Handles dynamic content better
-- Cons:
-  - Less control over styling
-  - Requires Chrome browser
-  - Heavier resource usage
+  - May not handle JavaScript content well
+  - Additional setup step
 
 ## Directory Structure
 
