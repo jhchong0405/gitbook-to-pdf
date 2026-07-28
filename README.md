@@ -16,7 +16,7 @@ A Python tool to convert GitBook documentation into a well-formatted PDF file. T
 
 ## Prerequisites
 
-1. Python 3.6 or higher
+1. Python 3.8 or higher
 2. For HTML method (optional):
    - wkhtmltopdf (Download from: https://wkhtmltopdf.org/downloads.html)
 3. For Print method (recommended):
@@ -26,7 +26,7 @@ A Python tool to convert GitBook documentation into a well-formatted PDF file. T
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/gitbook-to-pdf.git
+git clone https://github.com/jhchong0405/gitbook-to-pdf.git
 cd gitbook-to-pdf
 ```
 
@@ -46,6 +46,8 @@ The tool provides two methods for converting GitBook to PDF:
 ### 1. Print Method (Recommended)
 Uses Chrome's PDF printing. Better for JavaScript-heavy pages and modern web content. No additional software required.
 
+Print mode does not discover, configure, or require wkhtmltopdf.
+
 ```bash
 python gitbook_to_pdf.py https://your-gitbook-url.com -o output.pdf -m print
 ```
@@ -53,10 +55,23 @@ python gitbook_to_pdf.py https://your-gitbook-url.com -o output.pdf -m print
 ### 2. HTML Method
 Uses wkhtmltopdf for conversion. Better for custom styling and format control. Requires wkhtmltopdf installation.
 
+The HTML method looks for `wkhtmltopdf` on your system `PATH`. If it is
+installed elsewhere, provide its executable explicitly:
+
 ```bash
 python gitbook_to_pdf.py https://your-gitbook-url.com -o output.pdf
 # or explicitly specify the method
 python gitbook_to_pdf.py https://your-gitbook-url.com -o output.pdf -m html
+
+# Linux or macOS with a custom installation
+python gitbook_to_pdf.py https://your-gitbook-url.com -m html \
+  --wkhtmltopdf /opt/wkhtmltopdf/bin/wkhtmltopdf
+```
+
+```powershell
+# Windows PowerShell with a custom installation
+python gitbook_to_pdf.py https://your-gitbook-url.com -m html `
+  --wkhtmltopdf "C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
 ```
 
 ### Command Line Arguments
@@ -64,6 +79,8 @@ python gitbook_to_pdf.py https://your-gitbook-url.com -o output.pdf -m html
 - `url`: The URL of the GitBook main page (required)
 - `-o, --output`: Output PDF file name (default: output.pdf)
 - `-m, --method`: Conversion method: 'html' or 'print' (default: html)
+- `--wkhtmltopdf PATH`: Optional wkhtmltopdf executable path for the HTML
+  method; when omitted, the executable is discovered from `PATH`
 
 ## Output Format
 
@@ -105,13 +122,17 @@ The generated PDF includes:
 
 ```
 gitbook-to-pdf/
-├── gitbook_to_pdf.py     # Main script
-├── requirements.txt      # Python dependencies
-├── README.md            # Documentation
-├── .gitignore           # Git ignore file
-├── images/              # Downloaded images directory
-└── temp_pdfs/           # Temporary PDF files (for print method)
+├── gitbook_to_pdf.py
+├── requirements.txt
+├── tests/
+├── docs/
+├── README.md
+└── .gitignore
 ```
+
+Downloaded images, per-page PDFs, and intermediate HTML are created in an
+isolated system temporary directory and removed automatically. Only the final
+output PDF is retained.
 
 ## Contributing
 

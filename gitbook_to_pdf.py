@@ -5,12 +5,14 @@ import os
 import pdfkit
 import logging
 import re
+from pathlib import Path
 from datetime import datetime
 import base64
 import mimetypes
 import hashlib
 import json
-import sys
+import shutil
+import tempfile
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -23,9 +25,27 @@ from selenium.common.exceptions import WebDriverException
 import time
 import argparse
 
-# 配置 wkhtmltopdf 路径
-WKHTMLTOPDF_PATH = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
-config = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
+
+def resolve_wkhtmltopdf(explicit_path=None):
+    """Return a validated wkhtmltopdf executable path."""
+    if explicit_path:
+        candidate = Path(explicit_path).expanduser().resolve()
+        if not candidate.is_file() or not os.access(candidate, os.X_OK):
+            raise FileNotFoundError(
+                f"wkhtmltopdf path '{explicit_path}' does not point to "
+                "an executable file."
+            )
+        return str(candidate)
+
+    discovered = shutil.which("wkhtmltopdf")
+    if discovered:
+        return discovered
+
+    raise FileNotFoundError(
+        "wkhtmltopdf was not found. Install it on PATH or pass "
+        "--wkhtmltopdf with the executable path."
+    )
+
 
 def setup_chrome_driver():
     """设置 Chrome 驱动"""
@@ -60,13 +80,13 @@ def setup_chrome_driver():
             driver = webdriver.Chrome(service=service, options=chrome_options)
         
         return driver
-    except Exception as e:
-        print(f"设置 Chrome 驱动时出错: {str(e)}")
-        print("请确保系统已安装 Google Chrome。")
-        sys.exit(1)
+    except Exception as error:
+        raise RuntimeError(
+            "Could not start Chrome. Ensure Google Chrome is installed."
+        ) from error
 
 class GitbookToPDF:
-    def __init__(self, base_url, method='html'):
+    def __init__(self, base_url, method='html', wkhtmltopdf_path=None):
         self.base_url = base_url
         self.visited_urls = set()
         self.all_content = []
@@ -74,18 +94,45 @@ class GitbookToPDF:
         self.css_files = set()
         self.title = ""
         self.images = {}
-        self.image_dir = "images"
         self.method = method
-        self.temp_dir = "temp_pdfs"
-        
-        # 创建必要的目录
-        for directory in [self.image_dir, self.temp_dir]:
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-        
-        # 如果使用 selenium 方法，初始化 driver
-        if self.method == 'print':
-            self.driver = setup_chrome_driver()
+        self.wkhtmltopdf_path = wkhtmltopdf_path
+        self.driver = None
+        self._temporary_directory = tempfile.TemporaryDirectory(
+            prefix="gitbook-to-pdf-"
+        )
+        self.workspace_dir = Path(self._temporary_directory.name)
+        self.image_dir = self.workspace_dir / "images"
+        self.temp_dir = self.workspace_dir / "pages"
+        self.image_dir.mkdir()
+        self.temp_dir.mkdir()
+
+        try:
+            if self.method == 'print':
+                self.driver = setup_chrome_driver()
+        except Exception:
+            self._temporary_directory.cleanup()
+            self._temporary_directory = None
+            raise
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+        return False
+
+    def close(self):
+        """Release browser and temporary workspace resources."""
+        try:
+            if self.driver is not None:
+                driver = self.driver
+                self.driver = None
+                driver.quit()
+        finally:
+            if self._temporary_directory is not None:
+                temporary_directory = self._temporary_directory
+                self._temporary_directory = None
+                temporary_directory.cleanup()
     
     def print_to_pdf(self, url, index):
         """使用 Chrome 打印方式生成 PDF"""
@@ -292,7 +339,6 @@ class GitbookToPDF:
                 self.merge_pdfs(pdf_files, output_file)
                 print(f"PDF 生成完成: {output_file}")
             
-            self.driver.quit()
             return
 
         # HTML 方法
@@ -398,7 +444,7 @@ class GitbookToPDF:
         </html>
         """
         
-        temp_html = 'temp.html'
+        temp_html = str(self.workspace_dir / "document.html")
         with open(temp_html, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
@@ -421,31 +467,72 @@ class GitbookToPDF:
             'quiet': ''
         }
         
+        wkhtmltopdf_executable = resolve_wkhtmltopdf(
+            self.wkhtmltopdf_path
+        )
+        pdfkit_config = pdfkit.configuration(
+            wkhtmltopdf=wkhtmltopdf_executable
+        )
+
         try:
-            pdfkit.from_file(temp_html, output_file, options=options, configuration=config)
+            pdfkit.from_file(
+                temp_html,
+                output_file,
+                options=options,
+                configuration=pdfkit_config,
+            )
             print(f"PDF has been generated: {output_file}")
         except Exception as e:
             print(f"Error generating PDF: {str(e)}")
             print("Please make sure wkhtmltopdf is installed on your system.")
             print("You can download it from: https://wkhtmltopdf.org/downloads.html")
-        finally:
-            if os.path.exists(temp_html):
-                os.remove(temp_html)
 
-def main():
-    parser = argparse.ArgumentParser(description='Convert GitBook to PDF')
-    parser.add_argument('url', help='The URL of the GitBook main page')
-    parser.add_argument('--output', '-o', default='output.pdf', help='Output PDF file name')
-    parser.add_argument('--method', '-m', choices=['html', 'print'], default='html',
-                      help='Conversion method: html (using wkhtmltopdf) or print (using Chrome print)')
-    args = parser.parse_args()
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description='Convert GitBook to PDF'
+    )
+    parser.add_argument(
+        'url',
+        help='The URL of the GitBook main page',
+    )
+    parser.add_argument(
+        '--output',
+        '-o',
+        default='output.pdf',
+        help='Output PDF file name',
+    )
+    parser.add_argument(
+        '--method',
+        '-m',
+        choices=['html', 'print'],
+        default='html',
+        help='Conversion method: html (wkhtmltopdf) or print (Chrome)',
+    )
+    parser.add_argument(
+        '--wkhtmltopdf',
+        metavar='PATH',
+        help='Path to wkhtmltopdf for the html method; defaults to PATH',
+    )
+    return parser
 
-    converter = GitbookToPDF(args.url, method=args.method)
-    print("Starting to crawl the GitBook...")
-    if args.method == 'html':
-        converter.get_page_content(args.url)
-    print("Generating PDF...")
-    converter.generate_pdf(args.output)
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    try:
+        with GitbookToPDF(
+            args.url,
+            method=args.method,
+            wkhtmltopdf_path=args.wkhtmltopdf,
+        ) as converter:
+            print("Starting to crawl the GitBook...")
+            if args.method == 'html':
+                converter.get_page_content(args.url)
+            print("Generating PDF...")
+            converter.generate_pdf(args.output)
+    except (FileNotFoundError, RuntimeError) as error:
+        parser.exit(1, f"Error: {error}\n")
 
 if __name__ == '__main__':
     main()
