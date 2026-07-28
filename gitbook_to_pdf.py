@@ -86,7 +86,7 @@ def setup_chrome_driver():
         sys.exit(1)
 
 class GitbookToPDF:
-    def __init__(self, base_url, method='html'):
+    def __init__(self, base_url, method='html', wkhtmltopdf_path=None):
         self.base_url = base_url
         self.visited_urls = set()
         self.all_content = []
@@ -96,6 +96,7 @@ class GitbookToPDF:
         self.images = {}
         self.image_dir = "images"
         self.method = method
+        self.wkhtmltopdf_path = wkhtmltopdf_path
         self.temp_dir = "temp_pdfs"
         
         # 创建必要的目录
@@ -441,7 +442,12 @@ class GitbookToPDF:
             'quiet': ''
         }
         
-        pdfkit_config = pdfkit.configuration()
+        wkhtmltopdf_executable = resolve_wkhtmltopdf(
+            self.wkhtmltopdf_path
+        )
+        pdfkit_config = pdfkit.configuration(
+            wkhtmltopdf=wkhtmltopdf_executable
+        )
 
         try:
             pdfkit.from_file(
