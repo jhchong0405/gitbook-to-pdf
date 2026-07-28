@@ -5,12 +5,14 @@ import os
 import pdfkit
 import logging
 import re
+from pathlib import Path
 from datetime import datetime
 import base64
 import mimetypes
 import hashlib
 import json
 import sys
+import shutil
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -22,6 +24,28 @@ from PyPDF2 import PdfMerger
 from selenium.common.exceptions import WebDriverException
 import time
 import argparse
+
+
+def resolve_wkhtmltopdf(explicit_path=None):
+    """Return a validated wkhtmltopdf executable path."""
+    if explicit_path:
+        candidate = Path(explicit_path).expanduser().resolve()
+        if not candidate.is_file() or not os.access(candidate, os.X_OK):
+            raise FileNotFoundError(
+                f"wkhtmltopdf path '{explicit_path}' does not point to "
+                "an executable file."
+            )
+        return str(candidate)
+
+    discovered = shutil.which("wkhtmltopdf")
+    if discovered:
+        return discovered
+
+    raise FileNotFoundError(
+        "wkhtmltopdf was not found. Install it on PATH or pass "
+        "--wkhtmltopdf with the executable path."
+    )
+
 
 def setup_chrome_driver():
     """设置 Chrome 驱动"""
