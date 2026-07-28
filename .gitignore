@@ -35,3 +35,6 @@ ENV/
 *.pdf
 temp.html
 images/
+
+# Isolated development worktrees
+.worktrees/
