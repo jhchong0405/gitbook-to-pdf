@@ -120,6 +120,7 @@ class ConversionMethodIsolationTests(unittest.TestCase):
                 )
                 converter.download_css = Mock(return_value="")
                 converter.generate_pdf("output.pdf")
+                converter.close()
 
         resolve.assert_called_once_with("/custom/wkhtmltopdf")
         configuration.assert_called_once_with(
@@ -147,9 +148,65 @@ class ConversionMethodIsolationTests(unittest.TestCase):
                 converter.print_to_pdf = Mock(return_value=None)
                 converter.get_all_links = Mock(return_value=[])
                 converter.generate_pdf("output.pdf")
+                converter.close()
 
         configuration.assert_not_called()
         setup_driver.return_value.quit.assert_called_once_with()
+
+
+class TemporaryWorkspaceTests(unittest.TestCase):
+    def test_workspaces_are_unique_and_do_not_pollute_the_caller(self):
+        with tempfile.TemporaryDirectory() as caller_directory:
+            with working_directory(caller_directory):
+                first = gitbook_to_pdf.GitbookToPDF(
+                    "https://example.com",
+                    method="html",
+                )
+                second = gitbook_to_pdf.GitbookToPDF(
+                    "https://example.com",
+                    method="html",
+                )
+                first_workspace = Path(first.workspace_dir)
+                second_workspace = Path(second.workspace_dir)
+
+                self.assertNotEqual(first_workspace, second_workspace)
+                self.assertTrue(Path(first.image_dir).is_dir())
+                self.assertTrue(Path(first.temp_dir).is_dir())
+                self.assertFalse(Path("images").exists())
+                self.assertFalse(Path("temp_pdfs").exists())
+
+                first.close()
+                second.close()
+
+                self.assertFalse(first_workspace.exists())
+                self.assertFalse(second_workspace.exists())
+
+    @patch("gitbook_to_pdf.setup_chrome_driver")
+    def test_close_quits_driver_once_and_is_idempotent(self, setup_driver):
+        converter = gitbook_to_pdf.GitbookToPDF(
+            "https://example.com",
+            method="print",
+        )
+        workspace = Path(converter.workspace_dir)
+
+        converter.close()
+        converter.close()
+
+        setup_driver.return_value.quit.assert_called_once_with()
+        self.assertFalse(workspace.exists())
+
+    @patch("gitbook_to_pdf.setup_chrome_driver")
+    def test_context_manager_cleans_after_an_exception(self, setup_driver):
+        with self.assertRaisesRegex(RuntimeError, "conversion failed"):
+            with gitbook_to_pdf.GitbookToPDF(
+                "https://example.com",
+                method="print",
+            ) as converter:
+                workspace = Path(converter.workspace_dir)
+                raise RuntimeError("conversion failed")
+
+        setup_driver.return_value.quit.assert_called_once_with()
+        self.assertFalse(workspace.exists())
 
 
 if __name__ == "__main__":

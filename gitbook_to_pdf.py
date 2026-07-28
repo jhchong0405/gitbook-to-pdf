@@ -13,6 +13,7 @@ import hashlib
 import json
 import sys
 import shutil
+import tempfile
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -94,19 +95,44 @@ class GitbookToPDF:
         self.css_files = set()
         self.title = ""
         self.images = {}
-        self.image_dir = "images"
         self.method = method
         self.wkhtmltopdf_path = wkhtmltopdf_path
-        self.temp_dir = "temp_pdfs"
-        
-        # 创建必要的目录
-        for directory in [self.image_dir, self.temp_dir]:
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-        
-        # 如果使用 selenium 方法，初始化 driver
-        if self.method == 'print':
-            self.driver = setup_chrome_driver()
+        self.driver = None
+        self._temporary_directory = tempfile.TemporaryDirectory(
+            prefix="gitbook-to-pdf-"
+        )
+        self.workspace_dir = Path(self._temporary_directory.name)
+        self.image_dir = self.workspace_dir / "images"
+        self.temp_dir = self.workspace_dir / "pages"
+        self.image_dir.mkdir()
+        self.temp_dir.mkdir()
+
+        try:
+            if self.method == 'print':
+                self.driver = setup_chrome_driver()
+        except Exception:
+            self._temporary_directory.cleanup()
+            self._temporary_directory = None
+            raise
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+        return False
+
+    def close(self):
+        """Release browser and temporary workspace resources."""
+        if self.driver is not None:
+            driver = self.driver
+            self.driver = None
+            driver.quit()
+
+        if self._temporary_directory is not None:
+            temporary_directory = self._temporary_directory
+            self._temporary_directory = None
+            temporary_directory.cleanup()
     
     def print_to_pdf(self, url, index):
         """使用 Chrome 打印方式生成 PDF"""
@@ -313,7 +339,6 @@ class GitbookToPDF:
                 self.merge_pdfs(pdf_files, output_file)
                 print(f"PDF 生成完成: {output_file}")
             
-            self.driver.quit()
             return
 
         # HTML 方法
@@ -419,7 +444,7 @@ class GitbookToPDF:
         </html>
         """
         
-        temp_html = 'temp.html'
+        temp_html = str(self.workspace_dir / "document.html")
         with open(temp_html, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
@@ -461,9 +486,6 @@ class GitbookToPDF:
             print(f"Error generating PDF: {str(e)}")
             print("Please make sure wkhtmltopdf is installed on your system.")
             print("You can download it from: https://wkhtmltopdf.org/downloads.html")
-        finally:
-            if os.path.exists(temp_html):
-                os.remove(temp_html)
 
 def main():
     parser = argparse.ArgumentParser(description='Convert GitBook to PDF')
