@@ -209,6 +209,25 @@ class TemporaryWorkspaceTests(unittest.TestCase):
         setup_driver.return_value.quit.assert_called_once_with()
         self.assertFalse(workspace.exists())
 
+    @patch("gitbook_to_pdf.setup_chrome_driver")
+    def test_close_cleans_workspace_when_driver_quit_fails(
+        self,
+        setup_driver,
+    ):
+        setup_driver.return_value.quit.side_effect = RuntimeError(
+            "quit failed"
+        )
+        converter = gitbook_to_pdf.GitbookToPDF(
+            "https://example.com",
+            method="print",
+        )
+        workspace = Path(converter.workspace_dir)
+
+        with self.assertRaisesRegex(RuntimeError, "quit failed"):
+            converter.close()
+
+        self.assertFalse(workspace.exists())
+
 
 class CommandLineTests(unittest.TestCase):
     @patch("gitbook_to_pdf.GitbookToPDF")

@@ -123,15 +123,16 @@ class GitbookToPDF:
 
     def close(self):
         """Release browser and temporary workspace resources."""
-        if self.driver is not None:
-            driver = self.driver
-            self.driver = None
-            driver.quit()
-
-        if self._temporary_directory is not None:
-            temporary_directory = self._temporary_directory
-            self._temporary_directory = None
-            temporary_directory.cleanup()
+        try:
+            if self.driver is not None:
+                driver = self.driver
+                self.driver = None
+                driver.quit()
+        finally:
+            if self._temporary_directory is not None:
+                temporary_directory = self._temporary_directory
+                self._temporary_directory = None
+                temporary_directory.cleanup()
     
     def print_to_pdf(self, url, index):
         """使用 Chrome 打印方式生成 PDF"""

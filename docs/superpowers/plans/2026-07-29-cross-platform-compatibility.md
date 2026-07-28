@@ -519,6 +519,25 @@ class TemporaryWorkspaceTests(unittest.TestCase):
 
         setup_driver.return_value.quit.assert_called_once_with()
         self.assertFalse(workspace.exists())
+
+    @patch("gitbook_to_pdf.setup_chrome_driver")
+    def test_close_cleans_workspace_when_driver_quit_fails(
+        self,
+        setup_driver,
+    ):
+        setup_driver.return_value.quit.side_effect = RuntimeError(
+            "quit failed"
+        )
+        converter = gitbook_to_pdf.GitbookToPDF(
+            "https://example.com",
+            method="print",
+        )
+        workspace = Path(converter.workspace_dir)
+
+        with self.assertRaisesRegex(RuntimeError, "quit failed"):
+            converter.close()
+
+        self.assertFalse(workspace.exists())
 ```
 
 - [ ] **Step 2: Run the workspace tests and verify they fail**
@@ -578,15 +597,16 @@ Add these methods immediately after `__init__`:
 
     def close(self):
         """Release browser and temporary workspace resources."""
-        if self.driver is not None:
-            driver = self.driver
-            self.driver = None
-            driver.quit()
-
-        if self._temporary_directory is not None:
-            temporary_directory = self._temporary_directory
-            self._temporary_directory = None
-            temporary_directory.cleanup()
+        try:
+            if self.driver is not None:
+                driver = self.driver
+                self.driver = None
+                driver.quit()
+        finally:
+            if self._temporary_directory is not None:
+                temporary_directory = self._temporary_directory
+                self._temporary_directory = None
+                temporary_directory.cleanup()
 ```
 
 - [ ] **Step 5: Put the HTML document inside the workspace**
@@ -637,7 +657,7 @@ Run:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-Expected: PASS with ten tests and no `images`, `temp_pdfs`, or `temp.html`
+Expected: PASS with eleven tests and no `images`, `temp_pdfs`, or `temp.html`
 created in the repository.
 
 - [ ] **Step 8: Commit temporary-resource isolation**
@@ -809,7 +829,7 @@ Run:
 .\.venv\Scripts\python.exe gitbook_to_pdf.py --help
 ```
 
-Expected: twelve tests pass, and help contains
+Expected: thirteen tests pass, and help contains
 `[--wkhtmltopdf PATH]`.
 
 - [ ] **Step 6: Commit the CLI compatibility behavior**
@@ -944,7 +964,7 @@ git status -sb
 
 Expected:
 
-- twelve tests pass with zero failures or errors;
+- thirteen tests pass with zero failures or errors;
 - compilation exits zero;
 - CLI help includes `--wkhtmltopdf PATH`;
 - the diff check prints no errors;
