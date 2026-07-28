@@ -23,10 +23,6 @@ from selenium.common.exceptions import WebDriverException
 import time
 import argparse
 
-# 配置 wkhtmltopdf 路径
-WKHTMLTOPDF_PATH = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
-config = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
-
 def setup_chrome_driver():
     """设置 Chrome 驱动"""
     try:
@@ -421,8 +417,15 @@ class GitbookToPDF:
             'quiet': ''
         }
         
+        pdfkit_config = pdfkit.configuration()
+
         try:
-            pdfkit.from_file(temp_html, output_file, options=options, configuration=config)
+            pdfkit.from_file(
+                temp_html,
+                output_file,
+                options=options,
+                configuration=pdfkit_config,
+            )
             print(f"PDF has been generated: {output_file}")
         except Exception as e:
             print(f"Error generating PDF: {str(e)}")
