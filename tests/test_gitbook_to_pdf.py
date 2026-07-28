@@ -1,10 +1,11 @@
+import io
 import os
 import stat
 import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -207,6 +208,56 @@ class TemporaryWorkspaceTests(unittest.TestCase):
 
         setup_driver.return_value.quit.assert_called_once_with()
         self.assertFalse(workspace.exists())
+
+
+class CommandLineTests(unittest.TestCase):
+    @patch("gitbook_to_pdf.GitbookToPDF")
+    def test_wkhtmltopdf_override_is_forwarded(self, converter_class):
+        converter = converter_class.return_value.__enter__.return_value
+
+        gitbook_to_pdf.main(
+            [
+                "https://example.com",
+                "--method",
+                "html",
+                "--output",
+                "book.pdf",
+                "--wkhtmltopdf",
+                "/custom/wkhtmltopdf",
+            ]
+        )
+
+        converter_class.assert_called_once_with(
+            "https://example.com",
+            method="html",
+            wkhtmltopdf_path="/custom/wkhtmltopdf",
+        )
+        converter.get_page_content.assert_called_once_with(
+            "https://example.com"
+        )
+        converter.generate_pdf.assert_called_once_with("book.pdf")
+
+    @patch("gitbook_to_pdf.GitbookToPDF")
+    def test_missing_executable_exits_nonzero_without_traceback(
+        self,
+        converter_class,
+    ):
+        converter = converter_class.return_value.__enter__.return_value
+        converter.generate_pdf.side_effect = FileNotFoundError(
+            "wkhtmltopdf was not found"
+        )
+        error_output = io.StringIO()
+
+        with redirect_stderr(error_output):
+            with self.assertRaises(SystemExit) as raised:
+                gitbook_to_pdf.main(["https://example.com"])
+
+        self.assertEqual(raised.exception.code, 1)
+        self.assertIn(
+            "Error: wkhtmltopdf was not found",
+            error_output.getvalue(),
+        )
+        self.assertNotIn("Traceback", error_output.getvalue())
 
 
 if __name__ == "__main__":

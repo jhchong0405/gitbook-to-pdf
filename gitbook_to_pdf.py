@@ -11,7 +11,6 @@ import base64
 import mimetypes
 import hashlib
 import json
-import sys
 import shutil
 import tempfile
 from selenium import webdriver
@@ -81,10 +80,10 @@ def setup_chrome_driver():
             driver = webdriver.Chrome(service=service, options=chrome_options)
         
         return driver
-    except Exception as e:
-        print(f"设置 Chrome 驱动时出错: {str(e)}")
-        print("请确保系统已安装 Google Chrome。")
-        sys.exit(1)
+    except Exception as error:
+        raise RuntimeError(
+            "Could not start Chrome. Ensure Google Chrome is installed."
+        ) from error
 
 class GitbookToPDF:
     def __init__(self, base_url, method='html', wkhtmltopdf_path=None):
@@ -487,20 +486,52 @@ class GitbookToPDF:
             print("Please make sure wkhtmltopdf is installed on your system.")
             print("You can download it from: https://wkhtmltopdf.org/downloads.html")
 
-def main():
-    parser = argparse.ArgumentParser(description='Convert GitBook to PDF')
-    parser.add_argument('url', help='The URL of the GitBook main page')
-    parser.add_argument('--output', '-o', default='output.pdf', help='Output PDF file name')
-    parser.add_argument('--method', '-m', choices=['html', 'print'], default='html',
-                      help='Conversion method: html (using wkhtmltopdf) or print (using Chrome print)')
-    args = parser.parse_args()
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description='Convert GitBook to PDF'
+    )
+    parser.add_argument(
+        'url',
+        help='The URL of the GitBook main page',
+    )
+    parser.add_argument(
+        '--output',
+        '-o',
+        default='output.pdf',
+        help='Output PDF file name',
+    )
+    parser.add_argument(
+        '--method',
+        '-m',
+        choices=['html', 'print'],
+        default='html',
+        help='Conversion method: html (wkhtmltopdf) or print (Chrome)',
+    )
+    parser.add_argument(
+        '--wkhtmltopdf',
+        metavar='PATH',
+        help='Path to wkhtmltopdf for the html method; defaults to PATH',
+    )
+    return parser
 
-    converter = GitbookToPDF(args.url, method=args.method)
-    print("Starting to crawl the GitBook...")
-    if args.method == 'html':
-        converter.get_page_content(args.url)
-    print("Generating PDF...")
-    converter.generate_pdf(args.output)
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    try:
+        with GitbookToPDF(
+            args.url,
+            method=args.method,
+            wkhtmltopdf_path=args.wkhtmltopdf,
+        ) as converter:
+            print("Starting to crawl the GitBook...")
+            if args.method == 'html':
+                converter.get_page_content(args.url)
+            print("Generating PDF...")
+            converter.generate_pdf(args.output)
+    except (FileNotFoundError, RuntimeError) as error:
+        parser.exit(1, f"Error: {error}\n")
 
 if __name__ == '__main__':
     main()
