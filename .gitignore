@@ -34,8 +34,6 @@ ENV/
 
 # Project specific
 *.pdf
-temp.html
-images/
 
 # Isolated development worktrees
 .worktrees/
